@@ -8,7 +8,7 @@ use std::sync::mpsc::TryRecvError;
 
 use futures::{Poll, Async};
 use futures::stream::Stream;
-use mio::channel;
+use mio::channel::{self, TrySendError};
 
 use reactor::{Handle, PollEvented};
 
@@ -150,20 +150,11 @@ impl<T> SyncSender<T> {
     /// If an I/O error happens while sending the message, or if the receiver
     /// has gone away, or the buffer is full, then an error will be returned.
     /// Note that I/O errors here are generally quite abnormal.
-    pub fn try_send(&self, t: T) -> io::Result<()> {
-        self.tx.try_send(t).map_err(|e| {
-            match e {
-                channel::TrySendError::Io(e) => e,
-                channel::TrySendError::Disconnected(_) => {
-                    io::Error::new(io::ErrorKind::Other,
-                                   "channel has been disconnected")
-                }
-                channel::TrySendError::Full(_) => {
-                    io::Error::new(io::ErrorKind::Other,
-                                   "channel full")
-                }
-            }
-        })
+    pub fn try_send(&self, t: T) -> Result<(), TrySendError<T>> {
+        if let Err(e) = self.tx.try_send(t) {
+            return Err(e);
+        }
+        Ok(())
     }
 }
 
